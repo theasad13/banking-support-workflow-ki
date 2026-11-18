@@ -1,0 +1,4 @@
+loan_id	inst_no	stored	expected_at_new_rate	rate_change_delta	finding
+L-1004	33	-3611.11	16611.11	-3611.11	stored = delta
+L-1006	33	-6500	29900.0	-6500.0	stored = delta
+L-1008	33	-2708.33	12458.33	-2708.33	stored = delta

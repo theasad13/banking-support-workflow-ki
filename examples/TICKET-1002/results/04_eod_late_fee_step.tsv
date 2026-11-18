@@ -1,0 +1,6 @@
+run_date	step	status	message
+2026-09-26	LATE_FEE	OK	
+2026-09-27	LATE_FEE	OK	
+2026-09-28	LATE_FEE	OK	
+2026-09-29	LATE_FEE	OK	
+2026-09-30	LATE_FEE	SKIPPED	Previous step failed

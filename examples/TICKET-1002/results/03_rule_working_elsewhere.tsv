@@ -1,0 +1,3 @@
+loan_id	due_date	days_overdue	late_fee	late_fee_date
+L-1003	2026-09-10	20	500	2026-09-26
+L-1007	2026-09-20	10	0	

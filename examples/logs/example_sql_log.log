@@ -1,0 +1,145 @@
+=== 2026-10-28 16:16:28 | user=analyst | db=sample/bank_lms.db
+file=examples/TICKET-1001/queries/01_eod_status.sql
+purpose=TICKET-1001: 01_eod_status
+result=OK: 5 rows
+---
+-- TICKET-1001 step 1: which EOD step failed on 30 Sep, and what ran after it?
+SELECT run_date, seq, step, status, message
+FROM eod_process_log
+WHERE run_date = '2026-09-30'
+ORDER BY seq;
+
+=== 2026-10-28 16:16:28 | user=analyst | db=sample/bank_lms.db
+file=examples/TICKET-1001/queries/02_rejected_accounts.sql
+purpose=TICKET-1001: 02_rejected_accounts
+result=OK: 3 rows
+---
+-- TICKET-1001 step 2: installments due on the EOD date with a negative interest amount.
+SELECT i.loan_id, l.product_code, l.branch_code, i.inst_no, i.due_date,
+       i.opening_principal, i.interest_amount
+FROM installments i
+JOIN loans l ON l.loan_id = i.loan_id
+WHERE i.due_date = '2026-09-30' AND i.interest_amount < 0
+ORDER BY i.loan_id;
+
+=== 2026-10-28 16:16:28 | user=analyst | db=sample/bank_lms.db
+file=examples/TICKET-1001/queries/03_expected_vs_stored.sql
+purpose=TICKET-1001: 03_expected_vs_stored
+result=OK: 3 rows
+---
+-- TICKET-1001 step 3: compare the stored interest with (a) interest at the new rate
+-- and (b) the rate-change delta, using the old and new rate from the settings audit.
+WITH rate_change AS (
+    SELECT product_code, CAST(old_value AS REAL) AS old_rate, CAST(new_value AS REAL) AS new_rate
+    FROM settings_audit
+    WHERE setting_name = 'BASE_RATE' AND changed_at >= '2026-09-01'
+)
+SELECT i.loan_id, i.inst_no, i.interest_amount AS stored,
+       ROUND(i.opening_principal * rc.new_rate / 1200, 2) AS expected_at_new_rate,
+       ROUND(i.opening_principal * (rc.new_rate - rc.old_rate) / 1200, 2) AS rate_change_delta,
+       CASE WHEN ABS(i.interest_amount - i.opening_principal * (rc.new_rate - rc.old_rate) / 1200) < 0.01
+            THEN 'stored = delta' ELSE 'other' END AS finding
+FROM installments i
+JOIN loans l ON l.loan_id = i.loan_id
+JOIN rate_change rc ON rc.product_code = l.product_code
+WHERE i.due_date >= '2026-09-01' AND i.due_date <= '2026-09-30'
+ORDER BY i.loan_id;
+
+=== 2026-10-28 16:16:28 | user=analyst | db=sample/bank_lms.db
+file=examples/TICKET-1001/queries/04_config_check.sql
+purpose=TICKET-1001: 04_config_check
+result=OK: 3 rows
+---
+-- TICKET-1001 step 4: rule out configuration. Is the rate change approved, and do the
+-- product's GL mappings point to GL accounts that exist?
+SELECT 'audit' AS check_type, product_code, setting_name AS item,
+       old_value || ' -> ' || new_value AS detail,
+       CASE WHEN approved_by IS NOT NULL THEN 'approved by ' || approved_by ELSE 'NOT APPROVED' END AS result
+FROM settings_audit
+WHERE product_code = 'HL-VAR'
+UNION ALL
+SELECT 'gl_mapping', s.product_code, s.setting_name, s.setting_value,
+       CASE WHEN g.gl_code IS NOT NULL THEN 'GL exists' ELSE 'GL MISSING' END
+FROM product_settings s
+LEFT JOIN gl_accounts g ON g.gl_code = s.setting_value
+WHERE s.product_code = 'HL-VAR' AND s.setting_name LIKE '%_GL';
+
+=== 2026-10-28 16:16:28 | user=analyst | db=sample/bank_lms.db
+file=examples/TICKET-1002/queries/01_installment_status.sql
+purpose=TICKET-1002: 01_installment_status
+result=OK: 3 rows
+---
+-- TICKET-1002 step 1: the installment the branch is asking about, with days overdue on 30 Sep.
+SELECT i.loan_id, l.product_code, i.inst_no, i.due_date, i.paid_date, i.late_fee, i.late_fee_date,
+       CASE WHEN i.paid_date IS NULL
+            THEN CAST(julianday('2026-09-30') - julianday(i.due_date) AS INTEGER) END AS days_overdue
+FROM installments i
+JOIN loans l ON l.loan_id = i.loan_id
+WHERE i.loan_id = 'L-1007'
+ORDER BY i.inst_no;
+
+=== 2026-10-28 16:16:28 | user=analyst | db=sample/bank_lms.db
+file=examples/TICKET-1002/queries/02_late_fee_rule.sql
+purpose=TICKET-1002: 02_late_fee_rule
+result=OK: 2 rows
+---
+-- TICKET-1002 step 2: the late-fee rule configured for the loan's product.
+SELECT s.product_code, s.setting_name, s.setting_value, s.effective_from
+FROM product_settings s
+JOIN loans l ON l.product_code = s.product_code
+WHERE l.loan_id = 'L-1007' AND s.setting_name LIKE 'LATE_FEE%'
+ORDER BY s.setting_name;
+
+=== 2026-10-28 16:16:28 | user=analyst | db=sample/bank_lms.db
+file=examples/TICKET-1002/queries/03_rule_working_elsewhere.sql
+purpose=TICKET-1002: 03_rule_working_elsewhere
+result=OK: 2 rows
+---
+-- TICKET-1002 step 3: is the late-fee rule working at all? Every unpaid installment
+-- before 30 Sep, its days overdue, and whether a fee was charged.
+SELECT i.loan_id, i.due_date,
+       CAST(julianday('2026-09-30') - julianday(i.due_date) AS INTEGER) AS days_overdue,
+       i.late_fee, i.late_fee_date
+FROM installments i
+WHERE i.paid_date IS NULL AND i.due_date < '2026-09-30'
+ORDER BY days_overdue DESC;
+
+=== 2026-10-28 16:16:28 | user=analyst | db=sample/bank_lms.db
+file=examples/TICKET-1002/queries/04_eod_late_fee_step.sql
+purpose=TICKET-1002: 04_eod_late_fee_step
+result=OK: 5 rows
+---
+-- TICKET-1002 step 4: did the LATE_FEE step run on each EOD since the installment fell due?
+SELECT run_date, step, status, message
+FROM eod_process_log
+WHERE step = 'LATE_FEE' AND run_date >= '2026-09-20'
+ORDER BY run_date;
+
+=== 2026-10-28 16:16:28 | user=analyst | db=sample/bank_lms.db
+file=examples/TICKET-1001/PROPOSED_FIX.sql
+purpose=TICKET-1001: demo, trying to run the fix through the read-only runner
+result=REFUSED: write keyword UPDATE
+---
+-- PROPOSED_FIX for TICKET-1001: generated 2026-10-28 16:13. NOT EXECUTED.
+-- Table: installments. Keys: loan_id, inst_no. Columns changed: interest_amount.
+-- Expected rows changed: 3
+-- Steps: review -> run on a test copy -> record approval in CHANGE_LOG.md -> run for real.
+
+-- @section backup
+DROP TABLE IF EXISTS bak_TICKET_1001_installments;
+CREATE TABLE bak_TICKET_1001_installments AS SELECT * FROM installments WHERE (loan_id = 'L-1004' AND inst_no = 33) OR (loan_id = 'L-1006' AND inst_no = 33) OR (loan_id = 'L-1008' AND inst_no = 33);
+-- Check: SELECT COUNT(*) FROM bak_TICKET_1001_installments;  -- must be 3
+
+-- @section change
+UPDATE installments SET interest_amount = 16611.11 WHERE loan_id = 'L-1004' AND inst_no = 33;
+UPDATE installments SET interest_amount = 29900.00 WHERE loan_id = 'L-1006' AND inst_no = 33;
+UPDATE installments SET interest_amount = 12458.33 WHERE loan_id = 'L-1008' AND inst_no = 33;
+
+-- @section guard
+-- The result must be exactly 3. If not, do not commit: run the rollback section.
+SELECT COUNT(*) AS changed_rows FROM installments WHERE (loan_id = 'L-1004' AND inst_no = 33 AND interest_amount = 16611.11) OR (loan_id = 'L-1006' AND inst_no = 33 AND interest_amount = 29900.00) OR (loan_id = 'L-1008' AND inst_no = 33 AND interest_amount = 12458.33);
+
+-- @section rollback
+-- Restores the values saved in bak_TICKET_1001_installments. Keep the backup table until the fix is signed off.
+UPDATE installments SET interest_amount = (SELECT b.interest_amount FROM bak_TICKET_1001_installments b WHERE b.loan_id = installments.loan_id AND b.inst_no = installments.inst_no) WHERE EXISTS (SELECT 1 FROM bak_TICKET_1001_installments b WHERE b.loan_id = installments.loan_id AND b.inst_no = installments.inst_no);
+

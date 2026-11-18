@@ -1,0 +1,4 @@
+loan_id	product_code	branch_code	inst_no	due_date	opening_principal	interest_amount
+L-1004	HL-VAR	B03	33	2026-09-30	1733333.44	-3611.11
+L-1006	HL-VAR	B01	33	2026-09-30	3120000	-6500
+L-1008	HL-VAR	B02	33	2026-09-30	1300000	-2708.33

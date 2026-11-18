@@ -1,0 +1,4 @@
+loan_id	product_code	inst_no	due_date	paid_date	late_fee	late_fee_date	days_overdue
+L-1007	HL-FIX	31	2026-07-20	2026-07-20	0		
+L-1007	HL-FIX	32	2026-08-20	2026-08-20	0		
+L-1007	HL-FIX	33	2026-09-20		0		10

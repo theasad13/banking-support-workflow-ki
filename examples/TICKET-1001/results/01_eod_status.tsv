@@ -1,0 +1,6 @@
+run_date	seq	step	status	message
+2026-09-30	1	DUE_POSTING	OK	
+2026-09-30	2	INTEREST_ACCRUAL	FAILED	Negative accrual amount; 3 accounts rejected; step aborted
+2026-09-30	3	LATE_FEE	SKIPPED	Previous step failed
+2026-09-30	4	GL_POSTING	SKIPPED	Previous step failed
+2026-09-30	5	DAY_CLOSE	SKIPPED	Previous step failed

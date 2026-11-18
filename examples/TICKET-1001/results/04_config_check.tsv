@@ -1,0 +1,4 @@
+check_type	product_code	item	detail	result
+audit	HL-VAR	BASE_RATE	14.0 -> 11.5	approved by ops.manager1
+gl_mapping	HL-VAR	INTEREST_GL	4100-02	GL exists
+gl_mapping	HL-VAR	PRINCIPAL_GL	1300-02	GL exists
